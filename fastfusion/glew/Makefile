@@ -1,357 +1,352 @@
-## Copyright (C) 2002-2008, Marcelo E. Magallon <mmagallo[]debian org>
+#!gmake
+## The OpenGL Extension Wrangler Library
 ## Copyright (C) 2002-2008, Milan Ikits <milan ikits[]ieee org>
+## Copyright (C) 2002-2008, Marcelo E. Magallon <mmagallo[]debian org>
+## Copyright (C) 2002, Lev Povalahev
+## All rights reserved.
+## 
+## Redistribution and use in source and binary forms, with or without 
+## modification, are permitted provided that the following conditions are met:
+## 
+## * Redistributions of source code must retain the above copyright notice, 
+##   this list of conditions and the following disclaimer.
+## * Redistributions in binary form must reproduce the above copyright notice, 
+##   this list of conditions and the following disclaimer in the documentation 
+##   and/or other materials provided with the distribution.
+## * The name of the author may be used to endorse or promote products 
+##   derived from this software without specific prior written permission.
 ##
-## This program is distributed under the terms and conditions of the GNU
-## General Public License Version 2 as published by the Free Software
-## Foundation or, at your option, any later version.
+## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" 
+## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+## IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+## ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE 
+## LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
+## CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+## SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+## INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+## CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+## ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+## THE POSSIBILITY OF SUCH DAMAGE.
 
-include ../config/version
+include config/version
 
-#GLEW_SPLIT_SOURCE = yes
+SHELL = /bin/sh
+SYSTEM ?= $(shell config/config.guess | cut -d - -f 3 | sed -e 's/[0-9\.]//g;')
+SYSTEM.SUPPORTED = $(shell test -f config/Makefile.$(SYSTEM) && echo 1)
 
-SHELL = bash
-PYTHON ?= python
-
-### Use git repository for GL extension specifications
-
-GIT_CLONE  ?= git clone --branch glew https://github.com/nigels-com/glfixes.git
-
-###
-### Conventional desktop OpenGL settings
-###
-
-REGISTRY     = registry/gl/specs
-EXT          = extensions/gl
-FILTER       = filter_gl_ext.sh
-CORE         = core/gl
-REGISTRY_URL = http://www.opengl.org/registry/
-
-###
-### Experimental OpenGL ES settings
-###
-
-# REGISTRY     = registry/gles
-# EXT          = extensions/gles
-# FILTER       = filter_gles_ext.sh
-# CORE         = core/gles
-# REGISTRY_URL = http://www.khronos.org/registry/gles/
-
-BIN = bin
-SRC = src
-BLACKLIST = blacklist
-
-GL_CORE_SPEC := $(CORE)/GL_VERSION*
-GLX_CORE_SPEC := $(CORE)/GLX_VERSION*
-EGL_CORE_SPEC := $(CORE)/EGL_VERSION*
-ifeq (custom,$(MAKECMDGOALS))
-#GL_CORE_SPEC  := $(shell grep GL_VERSION custom.txt    |                       perl -pi -e "s=^=$(CORE)/=g;")
-GL_EXT_SPEC    := $(shell grep "^[ \t]*GL_" custom.txt  | grep -v GL_VERSION  | perl -pi -e "s=^=$(EXT)/=g;")
-WGL_EXT_SPEC   := $(shell grep "^[ \t]*WGL_" custom.txt |                       perl -pi -e "s=^=$(EXT)/=g;")
-#GLX_CORE_SPEC := $(shell grep GLX_VERSION custom.txt   |                       perl -pi -e "s=^=$(CORE)/=g;")
-GLX_EXT_SPEC   := $(shell grep "^[ \t]*GLX_" custom.txt | grep -v GLX_VERSION | perl -pi -e "s=^=$(EXT)/=g;")
-EGL_EXT_SPEC   := $(shell grep "^[ \t]*EGL_" custom.txt | grep -v EGL_VERSION | perl -pi -e "s=^=$(EXT)/=g;")
+ifeq ($(SYSTEM.SUPPORTED), 1)
+include config/Makefile.$(SYSTEM)
 else
-GL_EXT_SPEC := $(EXT)/GL_*
-WGL_EXT_SPEC := $(EXT)/WGL_*
-GLX_EXT_SPEC := $(EXT)/GLX_*
-EGL_EXT_SPEC := $(EXT)/EGL_*
+$(error "Platform '$(SYSTEM)' not supported")
 endif
 
-PARSE_SPEC = parse_spec.pl
-SYSTEM = $(strip $(shell uname -s))
+GLEW_PREFIX ?= /usr
+GLEW_DEST ?= /usr
+BINDIR    ?= $(GLEW_DEST)/bin
+LIBDIR    ?= $(GLEW_DEST)/lib
+INCDIR    ?= $(GLEW_DEST)/include/GL
+PKGDIR    ?= $(GLEW_DEST)/lib/pkgconfig
 
-TOP = ..
-I.DEST = $(TOP)/include/GL
-S.DEST = $(TOP)/src
-D.DEST = $(TOP)/doc
-B.DEST = $(TOP)/build
-
-I.TARGETS = \
-	$(I.DEST)/glew.h \
-	$(I.DEST)/wglew.h \
-	$(I.DEST)/glxew.h \
-	$(I.DEST)/eglew.h
-
-ifeq (yes,$(GLEW_SPLIT_SOURCE))
-S.TARGETS = \
-	$(S.DEST)/glew_def.c \
-	$(S.DEST)/glew_init.c \
-	$(S.DEST)/glew_str.c \
-	$(S.DEST)/glewinfo.c
-else
-S.TARGETS = \
-	$(S.DEST)/glew.c \
-	$(S.DEST)/glewinfo.c
+ifneq ($(GLEW_NO_GLU), -DGLEW_NO_GLU)
+LIBGLU = glu
 endif
 
-D.TARGETS = \
-	$(D.DEST)/index.html \
-	$(D.DEST)/install.html \
-	$(D.DEST)/basic.html \
-	$(D.DEST)/advanced.html \
-	$(D.DEST)/build.html \
-	$(D.DEST)/credits.html \
-	$(D.DEST)/log.html \
-	$(D.DEST)/glew.html \
-	$(D.DEST)/wglew.html \
-	$(D.DEST)/glxew.html
+DIST_NAME    ?= glew-$(GLEW_VERSION)
+DIST_SRC_ZIP ?= $(shell pwd)/$(DIST_NAME).zip
+DIST_SRC_TGZ ?= $(shell pwd)/$(DIST_NAME).tgz
+DIST_WIN32   ?= $(shell pwd)/$(DIST_NAME)-win32.zip
 
-B.TARGETS = \
-	$(B.DEST)/glew.rc \
-	$(B.DEST)/glewinfo.rc \
-	$(B.DEST)/visualinfo.rc
+DIST_DIR := $(shell mktemp -d /tmp/glew.XXXXXX)/$(DIST_NAME)
 
-all custom: $(I.TARGETS) $(S.TARGETS) $(D.TARGETS) $(B.TARGETS)
+# To disable stripping of linked binaries either:
+#   - use STRIP= on gmake command-line
+#   - edit this makefile to set STRIP to the empty string
+# (Note: STRIP does not affect the strip in the install step)
+#
+# To disable symlinks:
+#   - use LN= on gmake command-line
 
-registry: $(REGISTRY)/.dummy
-ext: $(EXT)/.dummy
+AR       ?= ar
+ARFLAGS  ?= cr
+INSTALL  ?= install
+STRIP    ?= strip
+RM       ?= rm -f
+LN       ?= ln -sf
+UNIX2DOS ?= unix2dos -q
+DOS2UNIX ?= dos2unix -q
 
-$(REGISTRY)/.dummy:
-	@echo "--------------------------------------------------------------------"
-	@echo "Downloading registry"
-	@echo "--------------------------------------------------------------------"
-	$(GIT_CLONE) registry
-	touch $@
-
-$(EXT)/.dummy: $(REGISTRY)/.dummy
-	@echo "--------------------------------------------------------------------"
-	@echo "Creating descriptors"
-	@echo "--------------------------------------------------------------------"
-	rm -rf $(EXT)
-	$(BIN)/update_ext.sh $(EXT) $(REGISTRY) $(BLACKLIST)
-	$(PYTHON) $(BIN)/parse_xml.py registry/xml/egl.xml --core core/gl --extensions extensions/gl
-	$(BIN)/$(FILTER)     $(EXT)
-ifeq ($(patsubst Darwin%,Darwin,$(SYSTEM)), Darwin)
-	find $(CORE) -maxdepth 1 -type f | grep -v VERSION | grep -v "~" | \
-	xargs -J % cp % $(EXT)
+ifneq (,$(filter debug,$(MAKECMDGOALS)))
+OPT = -g
 else
-	find $(CORE) -maxdepth 1 -type f | grep -v VERSION | grep -v "~" | \
-	xargs cp --target-directory=$(EXT)
+OPT = $(POPT)
 endif
-	touch $@
+INCLUDE = -Iinclude
+CFLAGS = $(OPT) $(WARN) $(INCLUDE) $(CFLAGS.EXTRA)
 
-$(I.DEST)/glew.h: $(EXT)/.dummy
-	@echo "--------------------------------------------------------------------"
-	@echo "Creating glew.h"
-	@echo "--------------------------------------------------------------------"
-	test -d $(I.DEST) || mkdir -p $(I.DEST)
-	cp -f $(SRC)/glew_license.h $@
-	cat $(SRC)/mesa_license.h >> $@
-	cat $(SRC)/khronos_license.h >> $@
-	cat $(SRC)/glew_head.h >> $@
-	$(BIN)/make_header.pl GLAPIENTRY GL $(GL_CORE_SPEC) >> $@
-	$(BIN)/make_header.pl GLAPIENTRY GL $(GL_EXT_SPEC) >> $@
-	echo -e "/* ------------------------------------------------------------------------- */\n\n" >> $@
-	$(BIN)/make_struct_fun.pl GLEW_FUN_EXPORT $(GL_CORE_SPEC) $(GL_EXT_SPEC) >> $@
-	$(BIN)/make_struct_var.pl GLEW_VAR_EXPORT $(GL_CORE_SPEC) $(GL_EXT_SPEC) >> $@
-	perl -e "s/GLEW_VAR_EXPORT GLboolean __GLEW_VERSION_1_2;/GLEW_VAR_EXPORT GLboolean __GLEW_VERSION_1_1;\nGLEW_VAR_EXPORT GLboolean __GLEW_VERSION_1_2;/" -pi $@
-	cat $(SRC)/glew_tail.h >> $@
-	perl -e "s/GLEW_VERSION_STRING/$(GLEW_VERSION)/g" -pi $@
-	perl -e "s/GLEW_VERSION_MAJOR_STRING/$(GLEW_MAJOR)/g" -pi $@
-	perl -e "s/GLEW_VERSION_MINOR_STRING/$(GLEW_MINOR)/g" -pi $@
-	perl -e "s/GLEW_VERSION_MICRO_STRING/$(GLEW_MICRO)/g" -pi $@
-	rm -f $@.bak
+all debug: glew.lib glew.bin
 
-$(I.DEST)/wglew.h: $(EXT)/.dummy
-	@echo "--------------------------------------------------------------------"
-	@echo "Creating wglew.h"
-	@echo "--------------------------------------------------------------------"
-	cp -f $(SRC)/glew_license.h $@
-	cat $(SRC)/khronos_license.h >> $@
-	cat $(SRC)/wglew_head.h >> $@
-	$(BIN)/make_header.pl WINAPI WGL $(WGL_EXT_SPEC) >> $@
-	cat $(SRC)/wglew_mid.h >> $@
-	$(BIN)/make_struct_fun.pl WGLEW_FUN_EXPORT $(WGL_EXT_SPEC) >> $@
-	$(BIN)/make_struct_var.pl WGLEW_VAR_EXPORT $(WGL_EXT_SPEC) >> $@
-	cat $(SRC)/wglew_tail.h >> $@
+# GLEW shared and static libraries
 
-$(I.DEST)/glxew.h: $(EXT)/.dummy
-	@echo "--------------------------------------------------------------------"
-	@echo "Creating glxew.h"
-	@echo "--------------------------------------------------------------------"
-	cp -f $(SRC)/glew_license.h $@
-	cat $(SRC)/mesa_license.h >> $@
-	cat $(SRC)/khronos_license.h >> $@
-	cat $(SRC)/glxew_head.h >> $@
-	$(BIN)/make_header.pl "" GLX $(GLX_CORE_SPEC) >> $@
-	$(BIN)/make_header.pl "" GLX $(GLX_EXT_SPEC) >> $@
-	cat $(SRC)/glxew_mid.h >> $@
-	$(BIN)/make_struct_fun.pl GLXEW_FUN_EXPORT $(GLX_CORE_SPEC) $(GLX_EXT_SPEC) >> $@
-	$(BIN)/make_struct_var.pl GLXEW_VAR_EXPORT $(GLX_CORE_SPEC) $(GLX_EXT_SPEC) >> $@
-	perl -e "s/GLXEW_VAR_EXPORT GLboolean __GLXEW_VERSION_1_2;/GLXEW_VAR_EXPORT GLboolean __GLXEW_VERSION_1_0;\nGLXEW_VAR_EXPORT GLboolean __GLXEW_VERSION_1_1;\nGLXEW_VAR_EXPORT GLboolean __GLXEW_VERSION_1_2;/" -pi $@
-	cat $(SRC)/glxew_tail.h >> $@
+LIB.LDFLAGS        := $(LDFLAGS.EXTRA) $(LDFLAGS.GL)
+LIB.LIBS           := $(GL_LDFLAGS)
 
-$(I.DEST)/eglew.h: $(EXT)/.dummy
-	@echo "--------------------------------------------------------------------"
-	@echo "Creating eglew.h"
-	@echo "--------------------------------------------------------------------"
-	cp -f $(SRC)/glew_license.h $@
-	cat $(SRC)/mesa_license.h >> $@
-	cat $(SRC)/khronos_license.h >> $@
-	cat $(SRC)/eglew_head.h >> $@
-	$(BIN)/make_header.pl "" EGL $(EGL_CORE_SPEC) >> $@
-	$(BIN)/make_header.pl "" EGL $(EGL_EXT_SPEC) >> $@
-	cat $(SRC)/eglew_mid.h >> $@
-	$(BIN)/make_struct_fun.pl EGLEW_FUN_EXPORT $(EGL_CORE_SPEC) $(EGL_EXT_SPEC) >> $@
-	$(BIN)/make_struct_var.pl EGLEW_VAR_EXPORT $(EGL_CORE_SPEC) $(EGL_EXT_SPEC) >> $@
-	cat $(SRC)/eglew_tail.h >> $@
+LIB.SRCS           := src/glew.c
+LIB.SRCS.NAMES     := $(notdir $(LIB.SRCS))
 
-$(S.DEST)/glew.c: $(EXT)/.dummy
-	@echo "--------------------------------------------------------------------"
-	@echo "Creating glew.c"
-	@echo "--------------------------------------------------------------------"
-	cp -f $(SRC)/glew_license.h $@
-	cat $(SRC)/glew_head.c >> $@
-	$(BIN)/make_def_fun.pl GL $(GL_CORE_SPEC) >> $@
-	$(BIN)/make_def_fun.pl GL $(GL_EXT_SPEC) >> $@
-	echo -e "\nGLboolean __GLEW_VERSION_1_1 = GL_FALSE;" >> $@
-	$(BIN)/make_def_var.pl GL $(GL_CORE_SPEC) >> $@
-	$(BIN)/make_def_var.pl GL $(GL_EXT_SPEC) >> $@
-	echo -e "\nstatic const char * _glewExtensionLookup[] = {" >> $@;
-	$(BIN)/make_index.pl $(GL_CORE_SPEC) $(GL_EXT_SPEC) >> $@
-	echo -e "  NULL\n};\n" >> $@;
-	$(BIN)/make_enable_index.pl $(GL_CORE_SPEC) $(GL_EXT_SPEC) >> $@
-	$(BIN)/make_initd.pl GL $(GL_CORE_SPEC) >> $@
-	$(BIN)/make_initd.pl GL $(GL_EXT_SPEC) >> $@
-	echo -e "" >> $@;
-	$(BIN)/make_init.pl GL $(GL_CORE_SPEC) >> $@
-	$(BIN)/make_init.pl GL $(GL_EXT_SPEC) >> $@
-	cat $(SRC)/glew_init_gl.c >> $@
-	$(BIN)/make_list.pl $(GL_CORE_SPEC) | grep -v '\"GL_VERSION' >> $@
-	$(BIN)/make_list.pl $(GL_EXT_SPEC) >> $@
-	$(BIN)/make_list2.pl $(GL_EXT_SPEC) >> $@
-	echo -e "\n  return GLEW_OK;\n}\n" >> $@
-	echo -e "\n#if defined(GLEW_OSMESA)" >> $@
-	echo -e "\n#elif defined(GLEW_EGL)" >> $@
-	$(BIN)/make_def_fun.pl EGL $(EGL_CORE_SPEC) >> $@
-	$(BIN)/make_def_fun.pl EGL $(EGL_EXT_SPEC) >> $@
-	$(BIN)/make_def_var.pl EGL $(EGL_CORE_SPEC) >> $@
-	$(BIN)/make_def_var.pl EGL $(EGL_EXT_SPEC) >> $@
-	$(BIN)/make_init.pl EGL $(EGL_CORE_SPEC) >> $@
-	$(BIN)/make_init.pl EGL $(EGL_EXT_SPEC) >> $@
-	cat $(SRC)/glew_init_egl.c >> $@
-	$(BIN)/make_list.pl $(EGL_CORE_SPEC) >> $@
-	$(BIN)/make_list.pl $(EGL_EXT_SPEC) >> $@
-	echo -e "\n  return GLEW_OK;\n}" >> $@
-	echo -e "\n#elif defined(_WIN32)" >> $@
-	$(BIN)/make_def_fun.pl WGL $(WGL_EXT_SPEC) >> $@
-	$(BIN)/make_def_var.pl WGL $(WGL_EXT_SPEC) >> $@
-	$(BIN)/make_init.pl WGL $(WGL_EXT_SPEC) >> $@
-	cat $(SRC)/glew_init_wgl.c >> $@
-	$(BIN)/make_list.pl $(WGL_EXT_SPEC) >> $@
-	echo -e "\n  return GLEW_OK;\n}" >> $@;
-	echo -e "\n#elif !defined(__ANDROID__) && !defined(__native_client__) && !defined(__HAIKU__) && (!defined(__APPLE__) || defined(GLEW_APPLE_GLX))" >> $@
-	$(BIN)/make_def_fun.pl GLX $(GLX_CORE_SPEC) >> $@
-	$(BIN)/make_def_fun.pl GLX $(GLX_EXT_SPEC) >> $@
-	echo -e "\nGLboolean __GLXEW_VERSION_1_0 = GL_FALSE;" >> $@
-	echo -e "GLboolean __GLXEW_VERSION_1_1 = GL_FALSE;" >> $@
-	$(BIN)/make_def_var.pl GLX $(GLX_CORE_SPEC) >> $@
-	$(BIN)/make_def_var.pl GLX $(GLX_EXT_SPEC) >> $@
-	$(BIN)/make_init.pl GLX $(GLX_CORE_SPEC) >> $@
-	$(BIN)/make_init.pl GLX $(GLX_EXT_SPEC) >> $@
-	cat $(SRC)/glew_init_glx.c >> $@
-	$(BIN)/make_list.pl $(CORE)/GLX_VERSION_1_3 | grep -v '\"GLX_VERSION' >> $@
-	$(BIN)/make_list.pl $(GLX_EXT_SPEC) >> $@
-	echo -e "\n  return GLEW_OK;\n}" >> $@
-	echo -e "\n#endif /* !defined(__ANDROID__) && !defined(__native_client__) && !defined(__HAIKU__) && (!defined(__APPLE__) || defined(GLEW_APPLE_GLX)) */\n" >> $@;
-	cat $(SRC)/glew_init_tail.c >> $@
-	cat $(SRC)/glew_str_head.c >> $@
-	$(BIN)/make_str.pl $(GL_CORE_SPEC) $(GL_EXT_SPEC) >> $@
-	cat $(SRC)/glew_str_wgl.c >> $@
-	$(BIN)/make_str.pl $(WGL_EXT_SPEC) >> $@
-	cat $(SRC)/glew_str_glx.c >> $@
-	$(BIN)/make_str.pl $(GLX_CORE_SPEC) $(GLX_EXT_SPEC) >> $@
-	cat $(SRC)/glew_str_egl.c >> $@
-	$(BIN)/make_str.pl $(EGL_CORE_SPEC) $(EGL_EXT_SPEC) >> $@
-	cat $(SRC)/glew_str_tail.c >> $@
-	perl -e "s/GLEW_VERSION_STRING/$(GLEW_VERSION)/g" -pi $@
-	perl -e "s/GLEW_VERSION_MAJOR_STRING/$(GLEW_MAJOR)/g" -pi $@
-	perl -e "s/GLEW_VERSION_MINOR_STRING/$(GLEW_MINOR)/g" -pi $@
-	perl -e "s/GLEW_VERSION_MICRO_STRING/$(GLEW_MICRO)/g" -pi $@
-	perl -e "s/GLEW_ARB_vertex_shader = !_glewInit_GL_ARB_vertex_shader\(\);/{ GLEW_ARB_vertex_shader = !_glewInit_GL_ARB_vertex_shader(); _glewInit_GL_ARB_vertex_program(); }/g" -pi $@
-	perl -e "s/\(\(glColorSubTable = /((glBlendEquation = (PFNGLBLENDEQUATIONPROC)glewGetProcAddress((const GLubyte*)\"glBlendEquation\")) == NULL) || r;\n  r = ((glColorSubTable = /g" -pi $@
-	rm -f $@.bak
+LIB.OBJS           := $(addprefix tmp/$(SYSTEM)/default/static/,$(LIB.SRCS.NAMES))
+LIB.OBJS           := $(LIB.OBJS:.c=.o)
+LIB.SOBJS          := $(addprefix tmp/$(SYSTEM)/default/shared/,$(LIB.SRCS.NAMES))
+LIB.SOBJS          := $(LIB.SOBJS:.c=.o)
 
-$(S.DEST)/glewinfo.c: $(EXT)/.dummy
-	@echo "--------------------------------------------------------------------"
-	@echo "Creating glewinfo.c"
-	@echo "--------------------------------------------------------------------"
-	cp -f $(SRC)/glew_license.h $@
-	cat $(SRC)/glewinfo_head.c >> $@
-	$(BIN)/make_info.pl $(GL_CORE_SPEC) >> $@
-	$(BIN)/make_info.pl $(GL_EXT_SPEC) >> $@
-	echo -e "#if defined(GLEW_EGL)\n" >> $@
-	$(BIN)/make_info.pl $(EGL_CORE_SPEC) >> $@
-	$(BIN)/make_info.pl $(EGL_EXT_SPEC) >> $@
-	echo -e "#elif _WIN32\n" >> $@
-	$(BIN)/make_info.pl $(WGL_EXT_SPEC) >> $@
-	echo -e "#else /* _UNIX */\n" >> $@
-	$(BIN)/make_info.pl $(GLX_CORE_SPEC) >> $@
-	$(BIN)/make_info.pl $(GLX_EXT_SPEC) >> $@
-	echo -e "#endif /* _WIN32 */\n" >> $@
+glew.lib: glew.lib.shared glew.lib.static
 
-	cat $(SRC)/glewinfo_gl.c >> $@
-	$(BIN)/make_info_list.pl $(GL_CORE_SPEC) >> $@
-	$(BIN)/make_info_list.pl $(GL_EXT_SPEC) >> $@
-	cat $(SRC)/glewinfo_wgl.c >> $@
-	$(BIN)/make_info_list.pl $(WGL_EXT_SPEC) >> $@
-	cat $(SRC)/glewinfo_glx.c >> $@
-	$(BIN)/make_info_list.pl $(GLX_CORE_SPEC) >> $@
-	$(BIN)/make_info_list.pl $(GLX_EXT_SPEC) >> $@
-	cat $(SRC)/glewinfo_egl.c >> $@
-	$(BIN)/make_info_list.pl $(EGL_CORE_SPEC) >> $@
-	$(BIN)/make_info_list.pl $(EGL_EXT_SPEC) >> $@
-	cat $(SRC)/glewinfo_tail.c >> $@
-	perl -e 's/"glColorSubTable"/"glBlendEquation", glBlendEquation == NULL);\n  glewInfoFunc("glColorSubTable"/g' -pi $@
-	rm -f $@.bak
+glew.lib.shared: lib lib/$(LIB.SHARED) glew.pc
+glew.lib.static: lib lib/$(LIB.STATIC) glew.pc
 
-# Update documentation
+.PHONY: glew.lib glew.lib.shared glew.lib.static
 
-$(D.DEST)/%.html: doc/%.html
-	@echo "--------------------------------------------------------------------"
-	@echo "Creating $(@F)"
-	@echo "--------------------------------------------------------------------"
-	cat $(SRC)/header.html $< $(SRC)/footer.html | \
-	perl -pe 's#<a href="$(@F)">(.*)</a>#\1#' > $@
+lib:
+	mkdir lib
 
-$(D.DEST)/glew.html: $(EXT)/.dummy
-	@echo "--------------------------------------------------------------------"
-	@echo "Creating glew.html"
-	@echo "--------------------------------------------------------------------"
-	cp -f $(SRC)/header.html $@
-	echo -e "<h2>Supported OpenGL Extensions</h2>\n" >> $@
-	$(BIN)/make_html.pl $(GL_EXT_SPEC) >> $@
-	cat $(SRC)/footer.html >> $@
-	perl -i -pe 's#<a href="$(@F)">(.*)</a>#\1#' $@
+lib/$(LIB.STATIC): $(LIB.OBJS)
+ifneq ($(AR),)
+	$(AR) $(ARFLAGS) $@ $^
+else ifneq ($(LIBTOOL),)
+	$(LIBTOOL) $@ $^
+endif
+ifneq ($(STRIP),)
+	$(STRIP) -x $@
+endif
 
-$(D.DEST)/wglew.html: $(EXT)/.dummy
-	@echo "--------------------------------------------------------------------"
-	@echo "Creating wglew.html"
-	@echo "--------------------------------------------------------------------"
-	cp -f $(SRC)/header.html $@
-	echo -e "<h2>Supported WGL Extensions</h2>\n" >> $@
-	$(BIN)/make_html.pl $(WGL_EXT_SPEC) >> $@
-	cat $(SRC)/footer.html >> $@
-	perl -i -pe 's#<a href="$(@F)">(.*)</a>#\1#' $@
+lib/$(LIB.SHARED): $(LIB.SOBJS)
+	$(LD) $(LDFLAGS.SO) -o $@ $^ $(LIB.LDFLAGS) $(LIB.LIBS)
+ifneq ($(LN),)
+	$(LN) $(LIB.SHARED) lib/$(LIB.SONAME)
+	$(LN) $(LIB.SHARED) lib/$(LIB.DEVLNK)
+endif
+ifneq ($(STRIP),)
+	$(STRIP) -x $@
+endif
 
-$(D.DEST)/glxew.html: $(EXT)/.dummy
-	@echo "--------------------------------------------------------------------"
-	@echo "Creating glxew.html"
-	@echo "--------------------------------------------------------------------"
-	cp -f $(SRC)/header.html $@
-	echo -e "<h2>Supported GLX Extensions</h2>\n" >> $@
-	$(BIN)/make_html.pl $(GLX_EXT_SPEC) >> $@
-	cat $(SRC)/footer.html >> $@
-	perl -i -pe 's#<a href="$(@F)">(.*)</a>#\1#' $@
+tmp/$(SYSTEM)/default/static/glew.o: src/glew.c include/GL/glew.h include/GL/wglew.h include/GL/glxew.h
+	@mkdir -p $(dir $@)
+	$(CC) -DGLEW_NO_GLU -DGLEW_STATIC $(CFLAGS) $(CFLAGS.SO) -o $@ -c $<
 
-$(B.DEST)/%.rc: src/%.rc $(EXT)/.dummy
-	perl -e "s/GLEW_MAJOR/$(GLEW_MAJOR)/g;s/GLEW_MINOR/$(GLEW_MINOR)/g;s/GLEW_MICRO/$(GLEW_MICRO)/g;" -p $< > $@
+tmp/$(SYSTEM)/default/shared/glew.o: src/glew.c include/GL/glew.h include/GL/wglew.h include/GL/glxew.h
+	@mkdir -p $(dir $@)
+	$(CC) -DGLEW_NO_GLU -DGLEW_BUILD $(CFLAGS) $(CFLAGS.SO) -o $@ -c $<
+
+# Force re-write of glew.pc, GLEW_DEST can vary
+
+.PHONY: glew.pc
+
+glew.pc: glew.pc.in
+	sed \
+		-e "s|@prefix@|$(GLEW_PREFIX)|g" \
+		-e "s|@libdir@|$(LIBDIR)|g" \
+		-e "s|@exec_prefix@|$(BINDIR)|g" \
+		-e "s|@includedir@|$(INCDIR)|g" \
+		-e "s|@version@|$(GLEW_VERSION)|g" \
+		-e "s|@cflags@||g" \
+		-e "s|@libname@|$(NAME)|g" \
+		-e "s|@requireslib@|$(LIBGLU)|g" \
+		< $< > $@
+
+# GLEW utility programs
+
+BIN.LIBS = -Llib $(LDFLAGS.DYNAMIC) -l$(NAME) $(LDFLAGS.EXTRA) $(LDFLAGS.GL)
+
+GLEWINFO.BIN       := glewinfo$(BIN.SUFFIX)
+GLEWINFO.BIN.SRC   := src/glewinfo.c
+GLEWINFO.BIN.OBJ   := $(addprefix tmp/$(SYSTEM)/default/shared/,$(notdir $(GLEWINFO.BIN.SRC)))
+GLEWINFO.BIN.OBJ   := $(GLEWINFO.BIN.OBJ:.c=.o)
+
+VISUALINFO.BIN     := visualinfo$(BIN.SUFFIX)
+VISUALINFO.BIN.SRC := src/visualinfo.c
+VISUALINFO.BIN.OBJ := $(addprefix tmp/$(SYSTEM)/default/shared/,$(notdir $(VISUALINFO.BIN.SRC)))
+VISUALINFO.BIN.OBJ := $(VISUALINFO.BIN.OBJ:.c=.o)
+
+# Don't build glewinfo or visualinfo for NaCL, yet.
+
+ifneq ($(filter nacl%,$(SYSTEM)),)
+glew.bin: glew.lib bin
+else
+glew.bin: glew.lib bin bin/$(GLEWINFO.BIN) bin/$(VISUALINFO.BIN) 
+endif
+
+bin:
+	mkdir bin
+
+bin/$(GLEWINFO.BIN): $(GLEWINFO.BIN.OBJ) lib/$(LIB.SHARED)
+	$(CC) $(CFLAGS) -o $@ $(GLEWINFO.BIN.OBJ) $(BIN.LIBS)
+ifneq ($(STRIP),)
+	$(STRIP) -x $@
+endif
+
+bin/$(VISUALINFO.BIN): $(VISUALINFO.BIN.OBJ) lib/$(LIB.SHARED)
+	$(CC) $(CFLAGS) -o $@ $(VISUALINFO.BIN.OBJ) $(BIN.LIBS)
+ifneq ($(STRIP),)
+	$(STRIP) -x $@
+endif
+
+$(GLEWINFO.BIN.OBJ): $(GLEWINFO.BIN.SRC) include/GL/glew.h include/GL/wglew.h include/GL/glxew.h
+	@mkdir -p $(dir $@)
+	$(CC) -DGLEW_NO_GLU $(CFLAGS) $(CFLAGS.SO) -o $@ -c $<
+
+$(VISUALINFO.BIN.OBJ): $(VISUALINFO.BIN.SRC) include/GL/glew.h include/GL/wglew.h include/GL/glxew.h
+	@mkdir -p $(dir $@)
+	$(CC) -DGLEW_NO_GLU $(CFLAGS) $(CFLAGS.SO) -o $@ -c $<
+
+# Install targets
+
+install.all: install install.bin
+
+install:     install.include install.lib install.pkgconfig
+
+install.lib: glew.lib
+	$(INSTALL) -d -m 0755 "$(DESTDIR)$(LIBDIR)"
+# runtime
+ifeq ($(filter-out mingw% cygwin,$(SYSTEM)),)
+	$(INSTALL) -d -m 0755 "$(DESTDIR)$(BINDIR)"
+	$(INSTALL) -m 0755 lib/$(LIB.SHARED) "$(DESTDIR)$(BINDIR)/"
+else
+	$(INSTALL) -m 0644 lib/$(LIB.SHARED) "$(DESTDIR)$(LIBDIR)/"
+endif
+ifneq ($(LN),)
+	$(LN) $(LIB.SHARED) "$(DESTDIR)$(LIBDIR)/$(LIB.SONAME)"
+endif
+
+# development files
+ifeq ($(filter-out mingw% cygwin,$(SYSTEM)),)
+	$(INSTALL) -m 0644 lib/$(LIB.DEVLNK) "$(DESTDIR)$(LIBDIR)/"
+endif
+ifneq ($(LN),)
+	$(LN) $(LIB.SHARED) "$(DESTDIR)$(LIBDIR)/$(LIB.DEVLNK)"
+endif
+	$(INSTALL) -m 0644 lib/$(LIB.STATIC) "$(DESTDIR)$(LIBDIR)/"
+
+install.bin: glew.bin
+	$(INSTALL) -d -m 0755 "$(DESTDIR)$(BINDIR)"
+	$(INSTALL) -s -m 0755 bin/$(GLEWINFO.BIN) bin/$(VISUALINFO.BIN) "$(DESTDIR)$(BINDIR)/"
+
+install.include:
+	$(INSTALL) -d -m 0755 "$(DESTDIR)$(INCDIR)"
+	$(INSTALL) -m 0644 include/GL/wglew.h "$(DESTDIR)$(INCDIR)/"
+	$(INSTALL) -m 0644 include/GL/glew.h "$(DESTDIR)$(INCDIR)/"
+	$(INSTALL) -m 0644 include/GL/glxew.h "$(DESTDIR)$(INCDIR)/"
+
+install.pkgconfig: glew.pc
+	$(INSTALL) -d -m 0755 "$(DESTDIR)$(PKGDIR)"
+	$(INSTALL) -d -m 0755 "$(DESTDIR)$(PKGDIR)"
+	$(INSTALL) -m 0644 glew.pc "$(DESTDIR)$(PKGDIR)/"
+
+uninstall:
+	$(RM) "$(DESTDIR)$(INCDIR)/wglew.h"
+	$(RM) "$(DESTDIR)$(INCDIR)/glew.h"
+	$(RM) "$(DESTDIR)$(INCDIR)/glxew.h"
+	$(RM) "$(DESTDIR)$(LIBDIR)/$(LIB.DEVLNK)"
+ifeq ($(filter-out mingw% cygwin,$(SYSTEM)),)
+	$(RM) "$(DESTDIR)$(BINDIR)/$(LIB.SHARED)"
+else
+	$(RM) "$(DESTDIR)$(LIBDIR)/$(LIB.SONAME)"
+	$(RM) "$(DESTDIR)$(LIBDIR)/$(LIB.SHARED)"
+endif
+	$(RM) "$(DESTDIR)$(LIBDIR)/$(LIB.STATIC)"
+	$(RM) "$(DESTDIR)$(BINDIR)/$(GLEWINFO.BIN)" "$(DESTDIR)$(BINDIR)/$(VISUALINFO.BIN)"
 
 clean:
-	rm -rf $(I.TARGETS) $(S.TARGETS) $(D.TARGETS) $(B.TARGETS)
+	$(RM) -r tmp/
+	$(RM) -r lib/
+	$(RM) -r bin/
+	$(RM) glew.pc
 
-clobber: clean
-	rm -rf $(EXT)
+distclean: clean
+	find . -name \*~ | xargs $(RM)
+	find . -name .\*.sw\? | xargs $(RM)
 
-destroy: clobber
-	rm -rf registry
+# Distributions
+
+dist-win32:
+	$(RM) -r $(DIST_DIR)
+	mkdir -p $(DIST_DIR)
+	cp -a include $(DIST_DIR)
+	cp -a doc $(DIST_DIR)
+	cp -a *.txt $(DIST_DIR)
+	cp -a bin $(DIST_DIR)
+	cp -a lib $(DIST_DIR)
+	$(RM) -f $(DIST_DIR)/bin/*/*/*.pdb $(DIST_DIR)/bin/*/*/*.exp
+	$(RM) -f $(DIST_DIR)/bin/*/*/glewinfo-*.exe $(DIST_DIR)/bin/*/*/visualinfo-*.exe 
+	$(RM) -f $(DIST_DIR)/lib/*/*/*.pdb $(DIST_DIR)/lib/*/*/*.exp
+	$(UNIX2DOS) $(DIST_DIR)/include/GL/*.h
+	$(UNIX2DOS) $(DIST_DIR)/doc/*.txt
+	$(UNIX2DOS) $(DIST_DIR)/doc/*.html
+	$(UNIX2DOS) $(DIST_DIR)/*.txt
+	rm -f $(DIST_WIN32)
+	cd $(DIST_DIR)/.. && zip -rq9 $(DIST_WIN32) $(DIST_NAME)
+	$(RM) -r $(DIST_DIR)
+
+dist-src:
+	$(RM) -r $(DIST_DIR)
+	mkdir -p $(DIST_DIR)
+	mkdir -p $(DIST_DIR)/bin
+	mkdir -p $(DIST_DIR)/lib
+	cp -a auto $(DIST_DIR)
+	$(RM) -Rf $(DIST_DIR)/auto/registry
+	cp -a build $(DIST_DIR)
+	cp -a config $(DIST_DIR)
+	cp -a src $(DIST_DIR)
+	cp -a doc $(DIST_DIR)
+	cp -a include $(DIST_DIR)
+	cp -a *.md $(DIST_DIR)
+	cp -a *.txt $(DIST_DIR)
+	cp -a Makefile $(DIST_DIR)
+	cp -a glew.pc.in $(DIST_DIR)
+	find $(DIST_DIR) -name '*.o' | xargs $(RM) -r
+	find $(DIST_DIR) -name '*~' | xargs $(RM) -r
+	find $(DIST_DIR) -name CVS -o -name .cvsignore | xargs $(RM) -r
+	find $(DIST_DIR) -name .svn | xargs $(RM) -r
+	find $(DIST_DIR) -name "*.patch" | xargs $(RM) -r
+	$(DOS2UNIX) $(DIST_DIR)/Makefile
+	$(DOS2UNIX) $(DIST_DIR)/auto/Makefile
+	$(DOS2UNIX) $(DIST_DIR)/config/*
+	$(UNIX2DOS) $(DIST_DIR)/auto/core/*
+	$(UNIX2DOS) $(DIST_DIR)/auto/extensions/*
+	find $(DIST_DIR) -name '*.h' | xargs $(UNIX2DOS)
+	find $(DIST_DIR) -name '*.c' | xargs $(UNIX2DOS)
+	find $(DIST_DIR) -name '*.md' | xargs $(UNIX2DOS)
+	find $(DIST_DIR) -name '*.txt' | xargs $(UNIX2DOS)
+	find $(DIST_DIR) -name '*.html' | xargs $(UNIX2DOS)
+	find $(DIST_DIR) -name '*.css' | xargs $(UNIX2DOS)
+	find $(DIST_DIR) -name '*.sh' | xargs $(UNIX2DOS)
+	find $(DIST_DIR) -name '*.pl' | xargs $(UNIX2DOS)
+	find $(DIST_DIR) -name 'Makefile' | xargs $(UNIX2DOS)
+	find $(DIST_DIR) -name '*.in' | xargs $(UNIX2DOS)
+	find $(DIST_DIR) -name '*.pm' | xargs $(UNIX2DOS)
+	find $(DIST_DIR) -name '*.rc' | xargs $(UNIX2DOS)
+	rm -f $(DIST_SRC_ZIP)
+	cd $(DIST_DIR)/.. && zip -rq9 $(DIST_SRC_ZIP) $(DIST_NAME)
+	$(DOS2UNIX) $(DIST_DIR)/Makefile
+	$(DOS2UNIX) $(DIST_DIR)/auto/Makefile
+	$(DOS2UNIX) $(DIST_DIR)/config/*
+	$(DOS2UNIX) $(DIST_DIR)/auto/core/*
+	$(DOS2UNIX) $(DIST_DIR)/auto/extensions/*
+	find $(DIST_DIR) -name '*.h' | xargs $(DOS2UNIX)
+	find $(DIST_DIR) -name '*.c' | xargs $(DOS2UNIX)
+	find $(DIST_DIR) -name '*.md' | xargs $(DOS2UNIX)
+	find $(DIST_DIR) -name '*.txt' | xargs $(DOS2UNIX)
+	find $(DIST_DIR) -name '*.html' | xargs $(DOS2UNIX)
+	find $(DIST_DIR) -name '*.css' | xargs $(DOS2UNIX)
+	find $(DIST_DIR) -name '*.sh' | xargs $(DOS2UNIX)
+	find $(DIST_DIR) -name '*.pl' | xargs $(DOS2UNIX)
+	find $(DIST_DIR) -name 'Makefile' | xargs $(DOS2UNIX)
+	find $(DIST_DIR) -name '*.in' | xargs $(DOS2UNIX)
+	find $(DIST_DIR) -name '*.pm' | xargs $(DOS2UNIX)
+	find $(DIST_DIR) -name '*.rc' | xargs $(DOS2UNIX)
+	rm -f $(DIST_SRC_TGZ)
+	cd $(DIST_DIR)/.. && env GZIP=-9 tar czf $(DIST_SRC_TGZ) $(DIST_NAME)
+	$(RM) -r $(DIST_DIR)
+
+extensions:
+	$(MAKE) -C auto
+
+.PHONY: clean distclean tardist dist-win32 dist-src
